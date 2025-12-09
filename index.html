@@ -32,6 +32,16 @@
       [data-framer-editor-button], .framer-editor-button { display: none !important; }
     </style>
 
+    <script>
+      // Remove Framer editor bar container entirely if it exists
+      document.addEventListener('DOMContentLoaded', function () {
+        var el = document.getElementById('__framer-editorbar-container');
+        if (el && el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      });
+    </script>
+
     <style data-framer-font-css>/* vietnamese */
 @font-face {
   font-family: 'Bricolage Grotesque';
