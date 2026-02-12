@@ -2103,57 +2103,187 @@
 
   // Init EmailJS
   if (window.emailjs) {
-    try { emailjs.init(EMAILJS_PUBLIC_KEY); } catch (e) {}
+    try { emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY }); } catch (e) { console.error('EmailJS init failed:', e); }
+  } else {
+    console.error('EmailJS library not available');
   }
 
   const pick = (nodes, predicate) => Array.from(nodes).find(predicate);
-  const getAttrText = (el) => (el?.placeholder || '') + (el?.getAttribute?.('aria-label') || '') + (el?.id || '') + (el?.name || '');
+  const getAttrText = (el) => ((el?.placeholder || '') + (el?.getAttribute?.('aria-label') || '') + (el?.id || '') + (el?.name || '') + (el?.getAttribute?.('autocomplete') || '')).toLowerCase();
 
-  const findName = () => pick(document.querySelectorAll('input[type="text"], input[role="textbox"]'), el => /name/i.test(getAttrText(el)));
-  const findEmail = () => pick(document.querySelectorAll('input[type="email"], input[type="text"]'), el => /email/i.test(getAttrText(el)) || /@/.test(el.value || ''));
-  const findCompany = () => pick(document.querySelectorAll('input[type="text"], input[role="textbox"]'), el => /company/i.test(getAttrText(el)));
-  const findMessage = () => pick(document.querySelectorAll('textarea, [contenteditable="true"], input[role="textbox"]'), el => /message/i.test(getAttrText(el)) || el.tagName === 'TEXTAREA');
-  const findMeeting = () => pick(document.querySelectorAll('select, [role="combobox"]'), el => /meeting|form/i.test(getAttrText(el)) || el.tagName === 'SELECT');
+  const getValue = (el) => {
+    if (!el) return '';
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return (el.value || '').trim();
+    if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true' || el.getAttribute?.('role') === 'textbox') return (el.innerText || el.textContent || '').trim();
+    const inner = el.querySelector('input, textarea, [contenteditable="true"], [role="textbox"]');
+    if (inner) return getValue(inner);
+    return (el.textContent || '').trim();
+  };
+
+  const findName = () => {
+    const candidates = document.querySelectorAll('input[type="text"], input[role="textbox"], [role="textbox"], [contenteditable="true"]');
+    const filled = Array.from(candidates).find(el => /name/.test(getAttrText(el)) && getValue(el));
+    return filled || pick(candidates, el => /name/.test(getAttrText(el)));
+  };
+
+  const findEmail = () => {
+    const candidates = document.querySelectorAll('input[type="email"], input[type="text"], [role="textbox"], [contenteditable="true"]');
+    const filled = Array.from(candidates).find(el => /email/.test(getAttrText(el)) && /@/.test(getValue(el)));
+    if (filled) return filled;
+    const byValue = Array.from(candidates).find(el => /@/.test(getValue(el)));
+    if (byValue) return byValue;
+    return pick(candidates, el => /email/.test(getAttrText(el)) || el.getAttribute?.('autocomplete') === 'email' || el.getAttribute?.('inputmode') === 'email');
+  };
+
+  const findCompany = () => {
+    const candidates = document.querySelectorAll('input[type="text"], input[role="textbox"], [role="textbox"], [contenteditable="true"]');
+    const filled = Array.from(candidates).find(el => /company|organization|org|firm/.test(getAttrText(el)) && getValue(el));
+    return filled || pick(candidates, el => /company|organization|org|firm/.test(getAttrText(el)));
+  };
+
+  const findMessage = () => {
+    const candidates = document.querySelectorAll('textarea, [contenteditable="true"], input[role="textbox"], [role="textbox"], input[type="text"]');
+    const filled = Array.from(candidates).find(el => getValue(el)?.length > 0 && (/message|your message|details|notes/.test(getAttrText(el)) || el.tagName === 'TEXTAREA' || el.isContentEditable));
+    if (filled) return filled;
+    return pick(candidates, el => /message|your message|details|notes/.test(getAttrText(el)) || el.tagName === 'TEXTAREA' || el.isContentEditable);
+  };
+
+  const findMeeting = () => {
+    const candidates = document.querySelectorAll('select, [role="combobox"], input[type="text"], [role="textbox"]');
+    const filled = Array.from(candidates).find(el => /meeting|form|type|interest/.test(getAttrText(el)) && getValue(el));
+    return filled || pick(candidates, el => /meeting|form|type|interest/.test(getAttrText(el)) || el.tagName === 'SELECT');
+  };
+
+  // Debug helpers
+  const debug = true;
+  const log = (...args) => { if (debug) console.log('[Contact]', ...args); };
+  const showStatus = (message, type = 'info') => {
+    let bar = document.getElementById('contact-status');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'contact-status';
+      bar.style.position = 'fixed';
+      bar.style.bottom = '16px';
+      bar.style.left = '50%';
+      bar.style.transform = 'translateX(-50%)';
+      bar.style.padding = '10px 14px';
+      bar.style.borderRadius = '8px';
+      bar.style.fontSize = '14px';
+      bar.style.zIndex = '99999';
+      bar.style.boxShadow = '0 4px 10px rgba(0,0,0,0.15)';
+      bar.style.color = '#fff';
+      bar.style.background = '#333';
+      document.body.appendChild(bar);
+    }
+    const colors = { info: '#333', success: '#2e7d32', error: '#c62828' };
+    bar.style.background = colors[type] || '#333';
+    bar.textContent = message;
+    bar.style.display = 'block';
+    clearTimeout(window.__contactStatusTimer);
+    window.__contactStatusTimer = setTimeout(() => { bar.style.display = 'none'; }, 5000);
+  };
 
   const sendEmail = async () => {
-    if (!window.emailjs) return alert('EmailJS library not loaded');
+    if (!window.emailjs) { showStatus('EmailJS not loaded', 'error'); alert('EmailJS library not loaded'); return; }
     const nameEl = findName();
     const emailEl = findEmail();
     const companyEl = findCompany();
     const messageEl = findMessage();
     const meetingEl = findMeeting();
 
-    const params = {
-      name: nameEl?.value || '',
-      email: emailEl?.value || '',
-      company: companyEl?.value || '',
-      message: (messageEl?.value ?? messageEl?.innerText ?? '') || '',
-      meeting: (meetingEl?.value ?? '') || ''
-    };
+    const name = getValue(nameEl);
+    const email = getValue(emailEl);
+    const company = getValue(companyEl);
+    const message = getValue(messageEl);
+    const meeting = getValue(meetingEl);
+
+    // Basic validation
+    const emailOk = /@/.test(email); // relaxed check to accommodate custom inputs
+    if (!emailOk || !message) {
+      showStatus('Enter a valid email and message', 'error');
+      console.warn('Validation failed:', { email, message, nameEl, emailEl, messageEl });
+      log('Debug elements:', {
+        nameElHTML: nameEl?.outerHTML,
+        emailElHTML: emailEl?.outerHTML,
+        messageElHTML: messageEl?.outerHTML
+      });
+      return;
+    }
+
+    const params = { name, email, company, message, meeting };
+    log('EmailJS params:', params);
+    showStatus('Sending...', 'info');
 
     try {
-      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, params);
+      log('Calling emailjs.send', { service: EMAILJS_SERVICE_ID, template: EMAILJS_TEMPLATE_ID });
+      const res = await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, params);
+      log('EmailJS success:', res);
+      showStatus('Sent successfully!', 'success');
       window.location.href = NEXT_URL;
     } catch (err) {
+      console.error('EmailJS send error:', err);
+      showStatus('Send failed. See console.', 'error');
       alert('Failed to send. Please try again later.');
-      console.error('EmailJS error:', err);
     }
   };
 
   // Wire "Submit/Send" buttons
-  const buttons = Array.from(document.querySelectorAll('button, [role="button"], a[role="button"]'))
-    .filter(b => /submit|send/i.test((b.textContent || '') + (b.getAttribute('aria-label') || '')));
-  buttons.forEach(btn => {
-    btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); sendEmail(); });
+  const isCandidate = (el) => /submit|send/i.test(((el?.textContent || '') + (el?.getAttribute?.('aria-label') || '')).trim());
+  const attachSubmitHandlers = () => {
+    const candidates = Array.from(document.querySelectorAll('button, input[type="submit"], [role="button"], a[role="button"], [tabindex="0"], .framer-button, .button'))
+      .filter(isCandidate);
+    log('Found submit candidates:', candidates.length);
+    candidates.forEach(btn => {
+      if (!btn.__contactHandlerAttached) {
+        btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); log('Submit click on', btn); showStatus('Submitting...', 'info'); sendEmail(); }, true);
+        btn.__contactHandlerAttached = true;
+      }
+    });
+  };
+  attachSubmitHandlers();
+
+  // Hook native form submissions
+  const forms = Array.from(document.querySelectorAll('form'));
+  log('Found forms:', forms.length);
+  forms.forEach(f => {
+    if (!f.__contactHandlerAttached) {
+      f.addEventListener('submit', (ev) => { ev.preventDefault(); ev.stopPropagation(); log('Form submit intercepted'); showStatus('Submitting...', 'info'); sendEmail(); });
+      f.__contactHandlerAttached = true;
+    }
   });
+
+  // Global click fallback (handles non-semantic clickable elements)
+  document.addEventListener('click', (ev) => {
+    const path = ev.composedPath?.() || [ev.target];
+    const target = path[0];
+    let el = target;
+    for (let i = 0; i < 5 && el; i++) {
+      if (isCandidate(el)) {
+        ev.preventDefault(); ev.stopPropagation();
+        log('Global click captured on submit candidate', el);
+        showStatus('Submitting...', 'info');
+        sendEmail();
+        break;
+      }
+      el = el.parentElement;
+    }
+  }, true);
+
+  // Observe DOM changes (Framer often replaces nodes)
+  const observer = new MutationObserver(() => {
+    attachSubmitHandlers();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 
   // Enter key submission
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') {
       const active = document.activeElement;
-      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      const isTextField = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.getAttribute('role') === 'textbox');
+      if (isTextField) {
+        // Submit on Enter when focused in a text input
         ev.preventDefault();
-        sendEmail();
+        log('Enter key submission'); showStatus('Submitting...', 'info'); sendEmail();
       }
     }
   });
