@@ -2093,27 +2093,18 @@
    </svg>
   </div>
   <!-- Start of bodyEnd -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <script>
 (() => {
-  const TARGET_ACTION = 'https://formsubmit.co/muster.reg@gmail.com';
+  const EMAILJS_PUBLIC_KEY = 'tuXLomuzXc_bY8GNA';
+  const EMAILJS_SERVICE_ID = 'service_7627sg2';
+  const EMAILJS_TEMPLATE_ID = 'template_97vz2yf';
   const NEXT_URL = 'https://eprocessly.github.io/contact?sent=1';
 
-  // Create a hidden shadow form we fully control (works even if visible inputs sit outside any <form>)
-  let shadowForm = document.getElementById('shadow-contact-form');
-  if (!shadowForm) {
-    shadowForm = document.createElement('form');
-    shadowForm.id = 'shadow-contact-form';
-    shadowForm.action = TARGET_ACTION;
-    shadowForm.method = 'POST';
-    shadowForm.style.display = 'none';
-    document.body.appendChild(shadowForm);
+  // Init EmailJS
+  if (window.emailjs) {
+    try { emailjs.init(EMAILJS_PUBLIC_KEY); } catch (e) {}
   }
-
-  const setHidden = (name, value) => {
-    let el = shadowForm.querySelector(`input[name="${name}"]`);
-    if (!el) { el = document.createElement('input'); el.type = 'hidden'; el.name = name; shadowForm.appendChild(el); }
-    el.value = value ?? '';
-  };
 
   const pick = (nodes, predicate) => Array.from(nodes).find(predicate);
   const getAttrText = (el) => (el?.placeholder || '') + (el?.getAttribute?.('aria-label') || '') + (el?.id || '') + (el?.name || '');
@@ -2124,47 +2115,45 @@
   const findMessage = () => pick(document.querySelectorAll('textarea, [contenteditable="true"], input[role="textbox"]'), el => /message/i.test(getAttrText(el)) || el.tagName === 'TEXTAREA');
   const findMeeting = () => pick(document.querySelectorAll('select, [role="combobox"]'), el => /meeting|form/i.test(getAttrText(el)) || el.tagName === 'SELECT');
 
-  const collectAndSubmit = () => {
-    // Refresh destination each time
-    shadowForm.action = TARGET_ACTION;
-    shadowForm.method = 'POST';
-
+  const sendEmail = async () => {
+    if (!window.emailjs) return alert('EmailJS library not loaded');
     const nameEl = findName();
     const emailEl = findEmail();
     const companyEl = findCompany();
     const messageEl = findMessage();
     const meetingEl = findMeeting();
 
-    setHidden('name', nameEl?.value || '');
-    setHidden('email', emailEl?.value || '');
-    setHidden('company', companyEl?.value || '');
-    setHidden('message', (messageEl?.value ?? messageEl?.innerText ?? '') || '');
-    setHidden('meeting', (meetingEl?.value ?? '') || '');
+    const params = {
+      name: nameEl?.value || '',
+      email: emailEl?.value || '',
+      company: companyEl?.value || '',
+      message: (messageEl?.value ?? messageEl?.innerText ?? '') || '',
+      meeting: (meetingEl?.value ?? '') || ''
+    };
 
-    // FormSubmit helpers
-    setHidden('_subject', 'New contact form submission');
-    setHidden('_captcha', 'false');
-    setHidden('_template', 'table');
-    setHidden('_next', NEXT_URL);
-
-    // Submit without relying on Framer handlers
-    shadowForm.submit();
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, params);
+      window.location.href = NEXT_URL;
+    } catch (err) {
+      alert('Failed to send. Please try again later.');
+      console.error('EmailJS error:', err);
+    }
   };
 
-  // Wire up visible buttons
+  // Wire "Submit/Send" buttons
   const buttons = Array.from(document.querySelectorAll('button, [role="button"], a[role="button"]'))
     .filter(b => /submit|send/i.test((b.textContent || '') + (b.getAttribute('aria-label') || '')));
   buttons.forEach(btn => {
-    btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); collectAndSubmit(); });
+    btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); sendEmail(); });
   });
 
-  // Also intercept Enter key on inputs to submit
+  // Enter key submission
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') {
       const active = document.activeElement;
       if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
         ev.preventDefault();
-        collectAndSubmit();
+        sendEmail();
       }
     }
   });
