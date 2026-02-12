@@ -2093,6 +2093,39 @@
    </svg>
   </div>
   <!-- Start of bodyEnd -->
+  <script>
+(() => {
+  const form = document.querySelector('form[action*="formsubmit.co"]') || document.querySelector('form');
+  if (!form) return;
+  form.method = 'POST';
+  form.action = 'https://formsubmit.co/muster.reg@gmail.com';
+  if (!form.id) form.id = 'contact-form';
+
+  const setName = (el, name) => { if (el && !el.name) el.name = name; };
+  setName(form.querySelector('input[type="text"]'), 'name');
+  setName(form.querySelector('input[type="email"]'), 'email');
+  setName(form.querySelector('textarea'), 'message');
+  const selectEl = form.querySelector('select'); setName(selectEl, 'meeting');
+  const companyInput = Array.from(form.querySelectorAll('input[type="text"]').values()).find(i => /company/i.test(((i.placeholder)||'') + ((i.ariaLabel)||'') + ((i.id)||'') + ((i.name)||'')));
+  setName(companyInput, 'company');
+
+  const ensureHidden = (name, value) => {
+    if (!form.querySelector(`input[name="${name}"]`)) {
+      const h = document.createElement('input'); h.type = 'hidden'; h.name = name; h.value = value; form.appendChild(h);
+    }
+  };
+  ensureHidden('_subject', 'New contact form submission');
+  ensureHidden('_captcha', 'false');
+  ensureHidden('_template', 'table');
+  ensureHidden('_next', 'https://eprocessly.github.io/contact?sent=1');
+
+  const buttons = Array.from(document.querySelectorAll('button[type="submit"], [role="button"]').values()).filter(b => /submit/i.test(((b.textContent)||'') + ((b.getAttribute('aria-label'))||'')));
+  buttons.forEach(btn => {
+    if (btn.form !== form) btn.setAttribute('form', form.id);
+    btn.addEventListener('click', () => { if (form.requestSubmit) form.requestSubmit(); else form.submit(); });
+  });
+})();
+  </script>
   <!-- End of bodyEnd -->
  </body>
 </html>
