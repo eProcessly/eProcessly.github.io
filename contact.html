@@ -2289,11 +2289,17 @@
       try {
         var path = window.location.pathname || "";
         var isContact = /\/contact(?:\.html)?$/.test(path);
-        var isCanonicalHost = (window.location.host || "") === "eprocessly.github.io";
-        var key = "autoRefresh-contact";
-        if (isContact && !isCanonicalHost && !sessionStorage.getItem(key)) {
-          sessionStorage.setItem(key, "1");
-          window.location.replace("https://eprocessly.github.io/contact");
+        var ref = document.referrer || "";
+        var fromContact = false;
+        try {
+          var ru = new URL(ref);
+          fromContact = /\/contact(?:\.html)?$/.test(ru.pathname || "");
+        } catch (_) {
+          fromContact = /\/contact(?:\.html)?/.test(ref);
+        }
+        if (isContact && !fromContact) {
+          // Arrived from another page: perform a single reload immediately.
+          window.location.reload();
         }
       } catch (e) {}
     })();
