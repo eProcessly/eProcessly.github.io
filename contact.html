@@ -2289,10 +2289,11 @@
       try {
         var path = window.location.pathname || "";
         var isContact = /\/contact(?:\.html)?$/.test(path);
+        var isCanonicalHost = (window.location.host || "") === "eprocessly.github.io";
         var key = "autoRefresh-contact";
-        if (isContact && !sessionStorage.getItem(key)) {
+        if (isContact && !isCanonicalHost && !sessionStorage.getItem(key)) {
           sessionStorage.setItem(key, "1");
-          window.location.reload();
+          window.location.replace("https://eprocessly.github.io/contact");
         }
       } catch (e) {}
     })();
